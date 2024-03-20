@@ -1,3 +1,99 @@
+import pandas as pd
+import random
+from flask import Flask, request, jsonify
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
+from sklearn.preprocessing import LabelEncoder
+
+app = Flask(__name__)
+
+def clean_data(input_file_path, cleaned_data_output_path):
+    df = pd.read_excel(input_file_path)
+    unwanted_columns = [
+        'Name', 'Parental Backgrond', 'Good in marks and subjects', 'Unnamed: 18'
+    ]
+    df_cleaned = df.drop(columns=unwanted_columns)
+    df_cleaned.dropna(subset=['Field'], inplace=True)
+    df_cleaned.to_csv(cleaned_data_output_path, index=False)
+    print("Data Cleaning complete. Cleaned data saved.")
+    print("Column Names:", df_cleaned.columns)
+
+def train_linear_regression_model(cleaned_data_file):
+    cleaned_data = pd.read_csv(cleaned_data_file)
+    label_encoder = LabelEncoder()
+    for column in cleaned_data.columns:
+        if cleaned_data[column].dtype == 'object':
+            cleaned_data[column] = label_encoder.fit_transform(cleaned_data[column])
+    X = cleaned_data.drop(columns=['Field'])
+    y = cleaned_data['Field']
+    model = LinearRegression()
+    model.fit(X, y)
+    return model, label_encoder
+
+def predict_field(model, new_data, label_encoder):
+    all_columns_except_field = [
+        'Sr. No.', 'History', 'Geography', 'Political Science', 'Economics',
+        'Maths', 'Physics', 'Chemistry', 'Biology', 'Accounts',
+        'Physical Education', 'Sports', 'Indoor sports', 'Art and Craft',
+        'Music', 'Dance'
+    ]
+    missing_columns = list(set(all_columns_except_field) - set(new_data.columns))
+    for col in missing_columns:
+        new_data[col] = 0
+    new_data = new_data[all_columns_except_field]
+    for column in new_data.columns:
+        if new_data[column].dtype == 'object':
+            new_data[column] = label_encoder.transform(new_data[column])
+    predictions = model.predict(new_data)
+    inverse_transformed_predictions = label_encoder.inverse_transform(predictions.round().astype(int))
+    return inverse_transformed_predictions
+
+input_file_path = 'project.xlsx'  
+cleaned_data_output_path = 'cleaned_data.csv'  
+clean_data(input_file_path, cleaned_data_output_path)
+print("Data Cleaning complete. Cleaned data saved.")
+
+target_variable = 'Field' 
+model, label_encoder = train_linear_regression_model(cleaned_data_output_path)
+print("Linear Regression Model trained.")
+
+new_data = pd.DataFrame({
+    'Sr. No.': [1],
+    'History': [3], 
+    'Geography': [4], 
+    'Political Science': [5],
+    'Economics': [8],
+    'Maths': [20],
+    'Physics': [12],
+    'Chemistry': [10],
+    'Biology': [30],
+    'Accounts': [45],
+    'Physical Education': [45],
+    'Sports': [14],
+    'Indoor sports': [45],
+    'Art and Craft': [78],
+    'Music': [20],
+    'Dance': [91],
+})
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    try:
+        data = request.json
+        new_data = pd.DataFrame([data])  # Wrap data in a list to create DataFrame
+        predictions = predict_field(model, new_data, label_encoder)
+        predicted_field = predictions[0]
+        return jsonify({'predicted_field': predicted_field})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+if __name__ == '__main__':
+    app.run(debug=True)
+
+
+
 # import pandas as pd
 # import random
 # from sklearn.model_selection import train_test_split
@@ -115,97 +211,3 @@
 # predicted_field = predictions[0]
 # print("\nPredicted Field:", predicted_field)
 
-
-import pandas as pd
-import random
-from flask import Flask, request, jsonify
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
-from sklearn.preprocessing import LabelEncoder
-
-app = Flask(__name__)
-
-def clean_data(input_file_path, cleaned_data_output_path):
-    df = pd.read_excel(input_file_path)
-    unwanted_columns = [
-        'Name', 'Parental Backgrond', 'Good in marks and subjects', 'Unnamed: 18'
-    ]
-    df_cleaned = df.drop(columns=unwanted_columns)
-    df_cleaned.dropna(subset=['Field'], inplace=True)
-    df_cleaned.to_csv(cleaned_data_output_path, index=False)
-    print("Data Cleaning complete. Cleaned data saved.")
-    print("Column Names:", df_cleaned.columns)
-
-def train_linear_regression_model(cleaned_data_file):
-    cleaned_data = pd.read_csv(cleaned_data_file)
-    label_encoder = LabelEncoder()
-    for column in cleaned_data.columns:
-        if cleaned_data[column].dtype == 'object':
-            cleaned_data[column] = label_encoder.fit_transform(cleaned_data[column])
-    X = cleaned_data.drop(columns=['Field'])
-    y = cleaned_data['Field']
-    model = LinearRegression()
-    model.fit(X, y)
-    return model, label_encoder
-
-def predict_field(model, new_data, label_encoder):
-    all_columns_except_field = [
-        'Sr. No.', 'History', 'Geography', 'Political Science', 'Economics',
-        'Maths', 'Physics', 'Chemistry', 'Biology', 'Accounts',
-        'Physical Education', 'Sports', 'Indoor sports', 'Art and Craft',
-        'Music', 'Dance'
-    ]
-    missing_columns = list(set(all_columns_except_field) - set(new_data.columns))
-    for col in missing_columns:
-        new_data[col] = 0
-    new_data = new_data[all_columns_except_field]
-    for column in new_data.columns:
-        if new_data[column].dtype == 'object':
-            new_data[column] = label_encoder.transform(new_data[column])
-    predictions = model.predict(new_data)
-    inverse_transformed_predictions = label_encoder.inverse_transform(predictions.round().astype(int))
-    return inverse_transformed_predictions
-
-input_file_path = 'project.xlsx'  
-cleaned_data_output_path = 'cleaned_data.csv'  
-clean_data(input_file_path, cleaned_data_output_path)
-print("Data Cleaning complete. Cleaned data saved.")
-
-target_variable = 'Field' 
-model, label_encoder = train_linear_regression_model(cleaned_data_output_path)
-print("Linear Regression Model trained.")
-
-new_data = pd.DataFrame({
-    'Sr. No.': [1],
-    'History': [3], 
-    'Geography': [4], 
-    'Political Science': [5],
-    'Economics': [8],
-    'Maths': [20],
-    'Physics': [12],
-    'Chemistry': [10],
-    'Biology': [30],
-    'Accounts': [45],
-    'Physical Education': [45],
-    'Sports': [14],
-    'Indoor sports': [45],
-    'Art and Craft': [78],
-    'Music': [20],
-    'Dance': [91],
-})
-
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        data = request.json
-        new_data = pd.DataFrame([data])  # Wrap data in a list to create DataFrame
-        predictions = predict_field(model, new_data, label_encoder)
-        predicted_field = predictions[0]
-        return jsonify({'predicted_field': predicted_field})
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-if __name__ == '__main__':
-    app.run(debug=True)
